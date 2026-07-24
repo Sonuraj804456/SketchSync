@@ -1,6 +1,6 @@
 import express from "express";
 import jwt from "jsonwebtoken";
-import { JWT_SECRET } from "./config";
+import { JWT_SECRET } from "@repo/backend-common/config";
 import { middleware } from "./middleware";
 
 const app = express();
@@ -17,7 +17,7 @@ app.post("/signin", (req, res) => {
         {
             userId
         },
-        JWT_SECRET
+        JWT_SECRET,
     );
 
     res.json({
