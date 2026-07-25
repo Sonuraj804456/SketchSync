@@ -1,186 +1,640 @@
 .page {
-  --gray-rgb: 0, 0, 0;
-  --gray-alpha-200: rgba(var(--gray-rgb), 0.08);
-  --gray-alpha-100: rgba(var(--gray-rgb), 0.05);
-
-  --button-primary-hover: #383838;
-  --button-secondary-hover: #f2f2f2;
-
-  display: grid;
-  grid-template-rows: 20px 1fr 20px;
-  align-items: center;
-  justify-items: center;
+  position: relative;
   min-height: 100svh;
-  padding: 80px;
-  gap: 64px;
-  font-synthesis: none;
+  overflow: hidden;
+  padding: 24px;
+  color: #f5efe6;
+  background:
+    radial-gradient(circle at top left, rgba(238, 190, 106, 0.2), transparent 28%),
+    radial-gradient(circle at 85% 18%, rgba(91, 182, 255, 0.18), transparent 26%),
+    linear-gradient(135deg, #0f1116 0%, #111826 48%, #0b0d12 100%);
 }
 
-@media (prefers-color-scheme: dark) {
-  .page {
-    --gray-rgb: 255, 255, 255;
-    --gray-alpha-200: rgba(var(--gray-rgb), 0.145);
-    --gray-alpha-100: rgba(var(--gray-rgb), 0.06);
-
-    --button-primary-hover: #ccc;
-    --button-secondary-hover: #1a1a1a;
-  }
+.glowOne,
+.glowTwo {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(60px);
+  opacity: 0.8;
+  pointer-events: none;
 }
 
-.main {
+.glowOne {
+  width: 320px;
+  height: 320px;
+  top: -120px;
+  left: -100px;
+  background: rgba(253, 179, 98, 0.16);
+}
+
+.glowTwo {
+  width: 420px;
+  height: 420px;
+  right: -160px;
+  top: 160px;
+  background: rgba(77, 143, 255, 0.16);
+}
+
+.gridNoise {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: radial-gradient(circle at center, black 44%, transparent 100%);
+  pointer-events: none;
+}
+
+.nav,
+.hero,
+.featureSection,
+.workflowSection {
+  position: relative;
+  z-index: 1;
+  width: min(1160px, 100%);
+  margin: 0 auto;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 8px 4px 28px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: #fff7eb;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.brandMark {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  color: #0e1116;
+  background: linear-gradient(135deg, #ffd38a 0%, #ffa45b 100%);
+  box-shadow: 0 18px 40px rgba(255, 154, 74, 0.25);
+}
+
+.navLinks {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  color: rgba(245, 239, 230, 0.72);
+  font-size: 15px;
+}
+
+.navActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.navLinks a,
+.navCta,
+.primaryAction,
+.secondaryAction,
+.panelFooter a,
+.authTab,
+.authTabActive,
+.formButton,
+.tokenPill {
+  transition:
+    transform 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    box-shadow 180ms ease,
+    opacity 180ms ease;
+}
+
+.navCta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  color: #0e1116;
+  background: #f5efe6;
+  font-weight: 600;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.18);
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  gap: 34px;
+  align-items: center;
+  padding: 34px 0 72px;
+}
+
+.heroCopy {
+  max-width: 640px;
+}
+
+.kicker {
+  margin-bottom: 18px;
+  color: #ffcb85;
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.heroCopy h1,
+.sectionHeader h2,
+.workflowCopy h2 {
+  margin: 0;
+  color: #fff9f0;
+  letter-spacing: -0.06em;
+  line-height: 0.95;
+}
+
+.heroCopy h1 {
+  max-width: 10ch;
+  font-size: clamp(3.5rem, 8.8vw, 6.5rem);
+}
+
+.subcopy {
+  max-width: 58ch;
+  margin-top: 22px;
+  color: rgba(245, 239, 230, 0.76);
+  font-size: 1.06rem;
+  line-height: 1.75;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 30px;
+}
+
+.primaryAction,
+.secondaryAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  padding: 0 22px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-weight: 700;
+}
+
+.primaryAction {
+  color: #0d1117;
+  background: linear-gradient(135deg, #ffd38a 0%, #ff9f57 100%);
+  box-shadow: 0 18px 40px rgba(255, 149, 66, 0.24);
+}
+
+.secondaryAction {
+  color: #f5efe6;
+  border-color: rgba(245, 239, 230, 0.16);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(14px);
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 28px;
+}
+
+.metrics div,
+.featureCard,
+.heroPanel,
+.stepCard,
+.roomsPanel,
+.roomStatusPanel {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.22);
+}
+
+.metrics div {
+  padding: 18px 18px 16px;
+  border-radius: 20px;
+}
+
+.metrics strong {
+  display: block;
+  font-size: 1.02rem;
+  color: #fff8ee;
+}
+
+.metrics span {
+  display: block;
+  margin-top: 6px;
+  color: rgba(245, 239, 230, 0.66);
+  font-size: 0.93rem;
+  line-height: 1.45;
+}
+
+.heroPanel {
   display: flex;
   flex-direction: column;
-  gap: 32px;
-  grid-row-start: 2;
+  gap: 18px;
+  padding: 20px;
+  border-radius: 28px;
 }
 
-.main ol {
-  font-family: var(--font-geist-mono);
-  padding-left: 0;
-  margin: 0;
-  font-size: 14px;
-  line-height: 24px;
-  letter-spacing: -0.01em;
-  list-style-position: inside;
+.panelTop {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  color: rgba(245, 239, 230, 0.72);
+  font-size: 0.95rem;
 }
 
-.main li:not(:last-of-type) {
-  margin-bottom: 8px;
+.windowDots {
+  display: inline-flex;
+  gap: 7px;
 }
 
-.main code {
-  font-family: inherit;
-  background: var(--gray-alpha-100);
-  padding: 2px 4px;
-  border-radius: 4px;
+.windowDots i {
+  display: block;
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background: rgba(245, 239, 230, 0.28);
+}
+
+.panelBadge {
+  padding: 6px 10px;
+  border-radius: 999px;
+  color: #ffd8a0;
+  background: rgba(255, 214, 150, 0.1);
+  border: 1px solid rgba(255, 214, 150, 0.14);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.authTabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 4px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.authTab,
+.authTabActive {
+  min-height: 46px;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  font: inherit;
+  font-weight: 700;
+  color: rgba(245, 239, 230, 0.68);
+  background: transparent;
+  cursor: pointer;
+}
+
+.authTabActive {
+  color: #0e1116;
+  background: linear-gradient(135deg, #ffd38a 0%, #ffb35d 100%);
+  box-shadow: 0 12px 24px rgba(255, 169, 87, 0.18);
+}
+
+.authForm,
+.roomForm {
+  display: grid;
+  gap: 14px;
+}
+
+.authForm {
+  padding: 4px 2px 2px;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.field span {
+  color: rgba(245, 239, 230, 0.74);
+  font-size: 0.92rem;
   font-weight: 600;
 }
 
-.ctas {
+.field input {
+  width: 100%;
+  min-height: 50px;
+  padding: 0 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  color: #fff8ef;
+  background: rgba(8, 12, 18, 0.72);
+  outline: none;
+  font: inherit;
+}
+
+.field input::placeholder {
+  color: rgba(245, 239, 230, 0.34);
+}
+
+.field input:focus {
+  border-color: rgba(255, 211, 138, 0.5);
+  box-shadow: 0 0 0 4px rgba(255, 193, 105, 0.14);
+}
+
+.formButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  padding: 0 18px;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  color: #0d1117;
+  background: linear-gradient(135deg, #ffd38a 0%, #ff9f57 100%);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 16px 28px rgba(255, 149, 66, 0.2);
+}
+
+.formButton:hover,
+.navCta:hover,
+.primaryAction:hover,
+.secondaryAction:hover,
+.authTab:hover,
+.authTabActive:hover,
+.panelFooter a:hover {
+  transform: translateY(-1px);
+}
+
+.formButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+  transform: none;
+}
+
+.panelFooter {
   display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 4px;
+}
+
+.panelLabel {
+  display: block;
+  margin-bottom: 6px;
+  color: rgba(245, 239, 230, 0.56);
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.panelFooter strong {
+  display: block;
+  color: #fff8ef;
+  font-size: 0.98rem;
+}
+
+.tokenPill,
+.tokenPillMuted {
+  max-width: 100%;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 214, 150, 0.16);
+  background: rgba(255, 214, 150, 0.08);
+  color: #ffd9a4;
+  font-size: 0.84rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tokenPillMuted {
+  color: rgba(245, 239, 230, 0.58);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.featureSection,
+.workflowSection {
+  padding-bottom: 72px;
+}
+
+.sectionHeader {
+  display: grid;
+  gap: 10px;
+  max-width: 780px;
+  margin-bottom: 24px;
+}
+
+.sectionHeader h2,
+.workflowCopy h2 {
+  font-size: clamp(2.2rem, 4vw, 3.8rem);
+}
+
+.featureGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
 }
 
-.ctas a {
-  appearance: none;
-  border-radius: 128px;
-  height: 48px;
-  padding: 0 20px;
-  font-family: var(--font-geist-sans);
-  border: 1px solid transparent;
-  transition: background 0.2s, color 0.2s, border-color 0.2s;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  line-height: 20px;
-  font-weight: 500;
+.featureCard {
+  padding: 24px;
+  border-radius: 24px;
 }
 
-a.primary {
-  background: var(--foreground);
-  color: var(--background);
-  gap: 8px;
+.featureIndex {
+  display: inline-flex;
+  margin-bottom: 16px;
+  color: #ffcb85;
+  font-size: 0.84rem;
+  letter-spacing: 0.14em;
+  font-weight: 800;
 }
 
-a.secondary {
-  border-color: var(--gray-alpha-200);
-  min-width: 180px;
+.featureCard h3 {
+  margin: 0;
+  color: #fff8ef;
+  font-size: 1.2rem;
+  letter-spacing: -0.03em;
 }
 
-button.secondary {
-  appearance: none;
-  border-radius: 128px;
-  height: 48px;
-  padding: 0 20px;
-  font-family: var(--font-geist-sans);
-  border: 1px solid transparent;
-  transition: background 0.2s, color 0.2s, border-color 0.2s;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  line-height: 20px;
-  font-weight: 500;
-  background: transparent;
-  border-color: var(--gray-alpha-200);
-  min-width: 180px;
+.featureCard p {
+  margin-top: 12px;
+  color: rgba(245, 239, 230, 0.72);
+  line-height: 1.7;
 }
 
-.footer {
-  font-family: var(--font-geist-sans);
-  grid-row-start: 3;
-  display: flex;
+.workflowSection {
+  display: grid;
   gap: 24px;
 }
 
-.footer a {
+.roomsPanel {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  padding: 20px;
+  border-radius: 28px;
+}
+
+.roomCardHeader {
   display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.roomCardHeader strong {
+  display: block;
+  margin-top: 6px;
+  color: #fff8ef;
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+}
+
+.roomPill,
+.roomPillSoft {
+  flex: none;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 214, 150, 0.16);
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
-.footer img {
-  flex-shrink: 0;
+.roomPill {
+  color: #ffd9a4;
+  background: rgba(255, 214, 150, 0.08);
 }
 
-/* Enable hover only on non-touch devices */
-@media (hover: hover) and (pointer: fine) {
-  a.primary:hover {
-    background: var(--button-primary-hover);
-    border-color: transparent;
+.roomPillSoft {
+  color: rgba(245, 239, 230, 0.68);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.roomHint {
+  color: rgba(245, 239, 230, 0.66);
+  line-height: 1.6;
+}
+
+.roomStatusPanel {
+  padding: 22px;
+  border-radius: 22px;
+}
+
+.roomStatusPanel strong {
+  display: block;
+  color: #fff8ef;
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+}
+
+.roomStatusPanel p {
+  margin-top: 12px;
+  color: rgba(245, 239, 230, 0.7);
+  line-height: 1.7;
+}
+
+.toastError {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 5;
+  max-width: min(520px, calc(100vw - 40px));
+  padding: 14px 16px;
+  border-radius: 18px;
+  color: #ffe5e5;
+  background: rgba(103, 25, 25, 0.92);
+  border: 1px solid rgba(255, 150, 150, 0.3);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.3);
+}
+
+@media (max-width: 1080px) {
+  .hero,
+  .roomsPanel {
+    grid-template-columns: 1fr;
   }
 
-  a.secondary:hover {
-    background: var(--button-secondary-hover);
-    border-color: transparent;
+  .heroCopy h1 {
+    max-width: 12ch;
   }
 
-  .footer a:hover {
-    text-decoration: underline;
-    text-underline-offset: 4px;
+  .featureGrid {
+    grid-template-columns: 1fr;
   }
 }
 
-@media (max-width: 600px) {
+@media (max-width: 860px) {
   .page {
-    padding: 32px;
-    padding-bottom: 80px;
+    padding: 16px;
   }
 
-  .main {
-    align-items: center;
-  }
-
-  .main ol {
-    text-align: center;
-  }
-
-  .ctas {
+  .nav {
+    align-items: flex-start;
     flex-direction: column;
   }
 
-  .ctas a {
-    font-size: 14px;
-    height: 40px;
-    padding: 0 16px;
-  }
-
-  a.secondary {
-    min-width: auto;
-  }
-
-  .footer {
+  .navLinks {
+    gap: 16px;
     flex-wrap: wrap;
-    align-items: center;
-    justify-content: center;
+  }
+
+  .metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .panelFooter {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  .logo {
-    filter: invert();
+@media (max-width: 560px) {
+  .hero {
+    padding-top: 20px;
+  }
+
+  .heroCopy h1 {
+    max-width: 100%;
+    font-size: clamp(3rem, 14vw, 4.2rem);
+  }
+
+  .sectionHeader h2,
+  .workflowCopy h2 {
+    font-size: clamp(2rem, 10vw, 3rem);
+  }
+
+  .heroPanel,
+  .roomsPanel,
+  .featureCard {
+    border-radius: 22px;
+  }
+
+  .panelTop {
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+
+  .tokenPill,
+  .tokenPillMuted {
+    width: 100%;
   }
 }
