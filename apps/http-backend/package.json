@@ -8,17 +8,22 @@
     "dev": "npm run build && npm run start"
   },
   "dependencies": {
+    "@prisma/client": "6",
+    "@repo/db": "workspace:*",
+    "@types/cors": "^2.8.19",
     "@types/node": "^22.15.3",
+    "cors": "^2.8.6",
     "express": "^5.0.6",
     "jsonwebtoken": "^9.0.3",
     "nodes": "^0.1.0"
   },
   "devDependencies": {
     "@repo/backend-common": "workspace:*",
+    "@repo/common": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.1",
-    "@repo/common": "workspace:*"
+    "prisma": "6"
   },
   "keywords": [],
   "author": "",

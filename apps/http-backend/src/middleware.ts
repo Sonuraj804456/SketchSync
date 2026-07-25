@@ -7,16 +7,18 @@ export function middleware(
   res: Response,
   next: NextFunction
 ) {
-  const token = req.headers["authorization"] ?? "";
+  const authHeader = req.headers["authorization"] ?? "";
+  const token = authHeader.startsWith("Bearer ")
+    ? authHeader.slice("Bearer ".length)
+    : authHeader;
 
-  const decoded = jwt.verify(token, JWT_SECRET);
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
 
-  if (decoded) {
     // @ts-ignore: TODO: Fix this???
-    req.userId = decoded.userId;
-
+    req.userId = (decoded as jwt.JwtPayload).userId;
     next();
-  } else {
+  } catch {
     res.status(403).json({
       message: "Unauthorized",
     });
