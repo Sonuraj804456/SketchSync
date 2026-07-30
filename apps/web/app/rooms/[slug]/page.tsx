@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type DragEvent,
   type KeyboardEvent,
   type PointerEvent,
   type WheelEvent,
@@ -21,12 +22,24 @@ type RoomRecord = {
   createdAt: string;
 };
 
-type Tool = "pan" | "select" | "rectangle" | "diamond" | "circle" | "arrow" | "line" | "pen" | "eraser" | "text";
+type Tool =
+  | "pan"
+  | "select"
+  | "rectangle"
+  | "diamond"
+  | "circle"
+  | "arrow"
+  | "line"
+  | "pen"
+  | "eraser"
+  | "text"
+  | "image";
 type DrawingTool = Exclude<Tool, "pan" | "select" | "eraser" | "text">;
 type BoardBackground = "paper" | "mint" | "warm" | "ink";
 type ShapeColorId = "slate" | "indigo" | "emerald" | "amber" | "rose";
 type MenuActionId =
   | "open"
+  | "image"
   | "save"
   | "export"
   | "collaboration"
@@ -90,7 +103,19 @@ type TextShape = BaseShape & {
   fontSize: number;
 };
 
-type Shape = RectangleShape | DiamondShape | CircleShape | LineShape | PenShape | TextShape;
+type ImageShape = BaseShape & {
+  type: "image";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  src: string;
+  name: string;
+  naturalWidth: number;
+  naturalHeight: number;
+};
+
+type Shape = RectangleShape | DiamondShape | CircleShape | LineShape | PenShape | TextShape | ImageShape;
 
 type Interaction =
   | { kind: "draw"; tool: DrawingTool; start: Point }
@@ -222,10 +247,11 @@ const MENU_ACTIONS: Array<{
   accent?: boolean;
 }> = [
   { id: "open", label: "Open", shortcut: "Cmd+O" },
+  { id: "image", label: "Insert image..." },
   { id: "save", label: "Save to..." },
   { id: "export", label: "Export image...", shortcut: "Cmd+Shift+E" },
   { id: "collaboration", label: "Live collaboration..." },
-  { id: "palette", label: "Command palette", shortcut: "Cmd+/" , accent: true },
+  { id: "palette", label: "Command palette", shortcut: "Cmd+/", accent: true },
   { id: "find", label: "Find on canvas", shortcut: "Cmd+F" },
   { id: "help", label: "Help", shortcut: "?" },
   { id: "reset", label: "Reset the canvas" },
@@ -329,6 +355,8 @@ function shapeBounds(shape: Shape) {
         width: Math.max(40, shape.text.length * shape.fontSize * 0.62),
         height: shape.fontSize * 1.25,
       };
+    case "image":
+      return normalizeRect(shape.x, shape.y, shape.width, shape.height);
   }
 }
 
@@ -371,6 +399,8 @@ function moveShape(shape: Shape, deltaX: number, deltaY: number): Shape {
         ...shape,
         points: shape.points.map((point) => ({ x: point.x + deltaX, y: point.y + deltaY })),
       };
+    case "image":
+      return { ...shape, x: shape.x + deltaX, y: shape.y + deltaY };
   }
 }
 
@@ -394,6 +424,19 @@ function createDraftShape(tool: DrawingTool, start: Point, color: { stroke: stri
       return { ...base, type: tool, x1: start.x, y1: start.y, x2: start.x, y2: start.y };
     case "pen":
       return { ...base, type: "pen", points: [start], fill: "none" };
+    case "image":
+      return {
+        ...base,
+        type: "image",
+        x: start.x,
+        y: start.y,
+        width: 1,
+        height: 1,
+        src: "",
+        name: "",
+        naturalWidth: 1,
+        naturalHeight: 1,
+      };
   }
 }
 
@@ -416,6 +459,8 @@ function updateDraftShape(shape: Shape, start: Point, current: Point): Shape {
       return { ...shape, points: [...shape.points, current] };
     case "text":
       return shape;
+    case "image":
+      return shape;
   }
 }
 
@@ -432,6 +477,8 @@ function isMeaningfulShape(shape: Shape) {
       return shape.points.length > 1;
     case "text":
       return Boolean(shape.text.trim());
+    case "image":
+      return Boolean(shape.src);
   }
 }
 
@@ -476,6 +523,10 @@ function isPointOnShape(shape: Shape, point: Point) {
       const bounds = shapeBounds(shape);
       return point.x >= bounds.x && point.x <= bounds.x + bounds.width && point.y >= bounds.y && point.y <= bounds.y + bounds.height;
     }
+    case "image": {
+      const bounds = shapeBounds(shape);
+      return point.x >= bounds.x && point.x <= bounds.x + bounds.width && point.y >= bounds.y && point.y <= bounds.y + bounds.height;
+    }
   }
 }
 
@@ -504,7 +555,7 @@ function removeShapeAtPoint(shapes: Shape[], point: Point) {
 function serializeBoard(roomSlug: string, shapes: Shape[], viewport: Viewport) {
   return JSON.stringify(
     {
-      version: 1,
+      version: 2,
       roomSlug,
       shapes,
       viewport,
@@ -546,8 +597,85 @@ function findMatchingShapes(shapes: Shape[], query: string) {
     if (shape.type === "text") {
       return shape.text.toLowerCase().includes(normalizedQuery);
     }
+    if (shape.type === "image") {
+      return [shape.type, shape.name].some((value) => value.toLowerCase().includes(normalizedQuery));
+    }
     return shape.type.toLowerCase().includes(normalizedQuery);
   });
+}
+
+type LoadedImageAsset = {
+  src: string;
+  name: string;
+  naturalWidth: number;
+  naturalHeight: number;
+};
+
+function fitImageSize(naturalWidth: number, naturalHeight: number, maxWidth = 420, maxHeight = 320) {
+  const width = Math.max(1, naturalWidth);
+  const height = Math.max(1, naturalHeight);
+  const scale = Math.min(maxWidth / width, maxHeight / height, 1);
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  };
+}
+
+function createImageShape(asset: LoadedImageAsset, center: Point): ImageShape {
+  const size = fitImageSize(asset.naturalWidth, asset.naturalHeight);
+  return {
+    id: createId(),
+    type: "image",
+    x: center.x - size.width / 2,
+    y: center.y - size.height / 2,
+    width: size.width,
+    height: size.height,
+    src: asset.src,
+    name: asset.name,
+    naturalWidth: asset.naturalWidth,
+    naturalHeight: asset.naturalHeight,
+    stroke: "transparent",
+    fill: "transparent",
+    strokeWidth: 0,
+  };
+}
+
+async function loadImageAsset(file: File): Promise<LoadedImageAsset> {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("Please choose an image file.");
+  }
+
+  const src = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+        return;
+      }
+      reject(new Error("Could not read that image."));
+    };
+    reader.onerror = () => reject(new Error("Could not read that image."));
+    reader.readAsDataURL(file);
+  });
+
+  const dimensions = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      resolve({
+        width: image.naturalWidth || image.width,
+        height: image.naturalHeight || image.height,
+      });
+    };
+    image.onerror = () => reject(new Error("Could not load that image."));
+    image.src = src;
+  });
+
+  return {
+    src,
+    name: file.name || "Image",
+    naturalWidth: dimensions.width,
+    naturalHeight: dimensions.height,
+  };
 }
 
 async function readRoom(response: Response): Promise<RoomResponse> {
@@ -607,6 +735,8 @@ export default function RoomPage() {
   const commandInputRef = useRef<HTMLInputElement | null>(null);
   const findInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const pendingImageRef = useRef<LoadedImageAsset | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const [room, setRoom] = useState<RoomRecord | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1025,6 +1155,12 @@ export default function RoomPage() {
       }
 
       if (event.key === "Escape") {
+        if (tool === "image" && pendingImageRef.current) {
+          pendingImageRef.current = null;
+          setTool("select");
+          setHint("Image placement cancelled.");
+          return;
+        }
         if (isCommandPaletteOpen) {
           setIsCommandPaletteOpen(false);
           return;
@@ -1082,7 +1218,7 @@ export default function RoomPage() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedId, textEditor, isMenuOpen, isCommandPaletteOpen, isFindOpen, isHelpOpen, handleExportImage]);
+  }, [selectedId, textEditor, isMenuOpen, isCommandPaletteOpen, isFindOpen, isHelpOpen, handleExportImage, tool]);
 
   function zoomAt(anchor: Point, nextScale: number) {
     const boundedScale = clamp(nextScale, MIN_SCALE, MAX_SCALE);
@@ -1109,6 +1245,116 @@ export default function RoomPage() {
     zoomAt(point, viewport.scale * delta);
   }
 
+  function insertImageAsset(asset: LoadedImageAsset, center: Point) {
+    const shape = createImageShape(asset, center);
+    setShapes((current) => [...current, shape]);
+    setSelectedId(shape.id);
+    setInteraction(null);
+    setDraftShape(null);
+    draftShapeRef.current = null;
+    setTextEditor(null);
+    setHint(`Placed ${asset.name}.`);
+  }
+
+  function getViewportCenterWorldPoint() {
+    const stage = stageRef.current;
+    if (!stage) {
+      return { x: 0, y: 0 };
+    }
+
+    const rect = stage.getBoundingClientRect();
+    return screenToWorld({ x: rect.width / 2, y: rect.height / 2 }, viewport);
+  }
+
+  function openImagePicker() {
+    imageInputRef.current?.click();
+    setTool("image");
+    setHint("Choose an image to place on the board.");
+    setIsMenuOpen(false);
+  }
+
+  async function handleImageInputChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+
+    try {
+      const asset = await loadImageAsset(file);
+      pendingImageRef.current = asset;
+      setTool("image");
+      setHint("Click on the canvas to place the image.");
+    } catch (imageError) {
+      setHint(imageError instanceof Error ? imageError.message : "Could not load that image.");
+    }
+  }
+
+  async function handleImageFiles(files: FileList | File[], center: Point) {
+    const file = Array.isArray(files) ? files[0] : files.item(0);
+    if (!file) {
+      return;
+    }
+
+    try {
+      const asset = await loadImageAsset(file);
+      insertImageAsset(asset, center);
+    } catch (imageError) {
+      setHint(imageError instanceof Error ? imageError.message : "Could not load that image.");
+    }
+  }
+
+  function handleStageDragOver(event: DragEvent<SVGSVGElement>) {
+    event.preventDefault();
+    if (Array.from(event.dataTransfer.files).some((file) => file.type.startsWith("image/"))) {
+      event.dataTransfer.dropEffect = "copy";
+    }
+  }
+
+  function handleStageDrop(event: DragEvent<SVGSVGElement>) {
+    const imageFile = Array.from(event.dataTransfer.files).find((file) => file.type.startsWith("image/"));
+    if (!imageFile) {
+      return;
+    }
+
+    event.preventDefault();
+    const stage = stageRef.current;
+    if (!stage) {
+      return;
+    }
+
+    const screenPoint = readPoint(event, stage);
+    const worldPoint = screenToWorld(screenPoint, viewport);
+    void handleImageFiles([imageFile], worldPoint);
+  }
+
+  useEffect(() => {
+    function handlePaste(event: ClipboardEvent) {
+      const pastedImage = Array.from(event.clipboardData?.items ?? []).find((item) => item.type.startsWith("image/"));
+      if (!pastedImage) {
+        return;
+      }
+
+      const file = pastedImage.getAsFile();
+      if (!file) {
+        return;
+      }
+
+      event.preventDefault();
+      void (async () => {
+        try {
+          const asset = await loadImageAsset(file);
+          insertImageAsset(asset, getViewportCenterWorldPoint());
+        } catch (imageError) {
+          setHint(imageError instanceof Error ? imageError.message : "Could not load that image.");
+        }
+      })();
+    }
+
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
+  }, [viewport]);
+
   function handleStagePointerDown(event: PointerEvent<SVGSVGElement>) {
     if (event.button !== 0) return;
 
@@ -1119,6 +1365,21 @@ export default function RoomPage() {
     const worldPoint = screenToWorld(screenPoint, viewport);
     const svg = event.currentTarget;
     const shapeColor = getShapeColor(shapeColorId);
+
+    if (tool === "image") {
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (!pendingImageRef.current) {
+        setHint("Choose an image first.");
+        return;
+      }
+
+      svg.setPointerCapture(event.pointerId);
+      insertImageAsset(pendingImageRef.current, worldPoint);
+      setHint("Image placed. Click again to place another copy or upload a new file.");
+      return;
+    }
 
     if (tool === "text") {
       event.preventDefault();
@@ -1372,6 +1633,22 @@ export default function RoomPage() {
             {isSelected ? <rect x={shapeBounds(shape).x - 8} y={shapeBounds(shape).y - 8} width={shapeBounds(shape).width + 16} height={shapeBounds(shape).height + 16} fill="none" stroke="#4f46e5" strokeDasharray="8 8" strokeWidth="2" pointerEvents="none" /> : null}
           </g>
         );
+      case "image": {
+        const bounds = shapeBounds(shape);
+        return (
+          <g key={shape.id}>
+            <image
+              href={shape.src}
+              x={bounds.x}
+              y={bounds.y}
+              width={bounds.width}
+              height={bounds.height}
+              preserveAspectRatio="xMidYMid meet"
+            />
+            {isSelected ? <rect x={bounds.x - 8} y={bounds.y - 8} width={bounds.width + 16} height={bounds.height + 16} rx="12" fill="none" stroke="#4f46e5" strokeDasharray="8 8" strokeWidth="2" pointerEvents="none" /> : null}
+          </g>
+        );
+      }
       case "text": {
         const bounds = shapeBounds(shape);
         return (
@@ -1484,6 +1761,9 @@ export default function RoomPage() {
       case "open":
         handleOpenFile();
         return;
+      case "image":
+        openImagePicker();
+        return;
       case "save":
         handleSaveBoard();
         return;
@@ -1581,7 +1861,7 @@ export default function RoomPage() {
 
           <div className={styles.toolbar} role="toolbar" aria-label="Canvas tools">
             {TOOLS.map((entry, index) => (
-          <button
+              <button
                 key={entry.id}
                 type="button"
                 className={tool === entry.id ? styles.toolButtonActive : styles.toolButton}
@@ -1599,6 +1879,16 @@ export default function RoomPage() {
                 <span className={styles.toolHotkey}>{index === 9 ? 0 : index + 1}</span>
               </button>
             ))}
+            <button
+              type="button"
+              className={tool === "image" ? styles.toolButtonActive : styles.toolButton}
+              onClick={openImagePicker}
+              aria-label="Insert image"
+              title="Insert image"
+            >
+              <span className={styles.toolIcon}>🖼</span>
+              <span className={styles.toolHotkey}>+</span>
+            </button>
           </div>
 
           <div className={styles.rightChrome}>
@@ -1610,6 +1900,7 @@ export default function RoomPage() {
         </div>
 
         <input ref={fileInputRef} className={styles.hiddenInput} type="file" accept="application/json" onChange={handleFileInputChange} />
+        <input ref={imageInputRef} className={styles.hiddenInput} type="file" accept="image/*" onChange={handleImageInputChange} />
 
         {isMenuOpen ? (
           <div className={styles.overlayBackdrop} onClick={() => setIsMenuOpen(false)}>
@@ -1782,7 +2073,7 @@ export default function RoomPage() {
                 </div>
                 <div>
                   <strong>Canvas</strong>
-                  <p>Cmd+F to search, Cmd+O to open, Cmd+Shift+E to export.</p>
+                  <p>Cmd+F to search, Cmd+O to open, Cmd+Shift+E to export, or paste and drop images onto the board.</p>
                 </div>
                 <div>
                   <strong>Menu</strong>
@@ -1804,6 +2095,8 @@ export default function RoomPage() {
           onPointerMove={handleStagePointerMove}
           onPointerUp={handleStagePointerUp}
           onPointerLeave={handleStagePointerUp}
+          onDragOver={handleStageDragOver}
+          onDrop={handleStageDrop}
         >
           <defs>
             <pattern id="grid" width="64" height="64" patternUnits="userSpaceOnUse">
