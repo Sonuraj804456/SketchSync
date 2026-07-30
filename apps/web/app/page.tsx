@@ -10,19 +10,19 @@ const ROOM_API_BASE = "/api/rooms";
 
 const features = [
   {
-    title: "JWT-backed sessions",
+    title: "Fast sign in",
     description:
-      "Sign in or sign up against the backend, then keep your session in local storage until you choose to leave.",
+      "Sign in or sign up, then keep moving without losing your place.",
   },
   {
-    title: "Protected room creation",
+    title: "Room access",
     description:
-      "Create rooms with the same bearer token the backend expects on authenticated routes.",
+      "Create a room and jump straight into the canvas in one flow.",
   },
   {
-    title: "Fast feedback loop",
+    title: "Clear feedback",
     description:
-      "Get clear success and error states so you can tell right away whether the backend accepted your request.",
+      "See clear success and error states so you always know what happened.",
   },
 ];
 
@@ -75,14 +75,6 @@ async function readJson<T = Record<string, unknown>>(
   };
 }
 
-function shortenToken(token: string) {
-  if (token.length <= 18) {
-    return token;
-  }
-
-  return `${token.slice(0, 8)}…${token.slice(-8)}`;
-}
-
 export default function Home() {
   const router = useRouter();
   const [isNavigating, startTransition] = useTransition();
@@ -93,7 +85,7 @@ export default function Home() {
   const [createRoomName, setCreateRoomName] = useState("");
   const [joinRoomSlug, setJoinRoomSlug] = useState("");
   const [session, setSession] = useState<SessionState | null>(null);
-  const [status, setStatus] = useState("Ready to connect to the backend.");
+  const [status, setStatus] = useState("Ready when you are.");
   const [error, setError] = useState("");
   const [roomStatus, setRoomStatus] = useState("");
   const [joinStatus, setJoinStatus] = useState("");
@@ -105,12 +97,12 @@ export default function Home() {
     const storedToken = window.localStorage.getItem("sketchsync-token");
     const storedUserId = window.localStorage.getItem("sketchsync-user-id");
 
-    if (storedToken) {
-      setSession({
-        token: storedToken,
-        userId: storedUserId ?? undefined,
-      });
-      setStatus("Restored your saved session.");
+      if (storedToken) {
+        setSession({
+          token: storedToken,
+          userId: storedUserId ?? undefined,
+        });
+      setStatus("Restored your session.");
     }
   }, []);
 
@@ -150,7 +142,7 @@ export default function Home() {
 
       const token = result.data.token;
       if (!token) {
-        setError("The backend did not return a token.");
+        setError("Sign in did not return a token.");
         return;
       }
 
@@ -172,7 +164,7 @@ export default function Home() {
       setError(
         submitError instanceof Error
           ? submitError.message
-          : "Something went wrong while talking to the backend."
+          : "Something went wrong while signing in."
       );
     } finally {
       setIsSubmitting(false);
@@ -182,7 +174,7 @@ export default function Home() {
   async function handleCreateRoom(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!session?.token) {
-      setError("Sign in first so we can attach your bearer token.");
+      setError("Sign in first to create a room.");
       return;
     }
 
@@ -315,7 +307,7 @@ export default function Home() {
             </button>
           ) : (
             <a className={styles.navCta} href="#auth">
-              Connect backend
+              Open auth
             </a>
           )}
         </div>
@@ -323,51 +315,50 @@ export default function Home() {
 
       <section className={styles.hero}>
         <div className={styles.heroCopy}>
-          <p className={styles.kicker}>Backend-authenticated sketching</p>
-          <h1>Sign in, create a room, and keep your canvas secure.</h1>
+          <p className={styles.kicker}>Sketching, simplified</p>
+          <h1>Sign in, create a room, and keep drawing.</h1>
           <p className={styles.subcopy}>
-            The frontend now speaks the backend’s auth contract directly: sign up
-            with a username, password, and name, sign in to receive a JWT, then
-            send that token as a bearer header when you create rooms.
+            Sign in once, create a room, and keep your focus on the canvas. The
+            whole flow is built to feel quick, clear, and out of the way.
           </p>
 
           <div className={styles.actions}>
             <a className={styles.primaryAction} href="#auth">
-              Start auth flow
+              Open auth panel
             </a>
             <a className={styles.secondaryAction} href="#rooms">
               Create a room
             </a>
           </div>
 
-          <div className={styles.metrics} aria-label="Authentication highlights">
+          <div className={styles.metrics} aria-label="Quick actions">
             <div>
-              <strong>POST /signup</strong>
-              <span>creates a user</span>
+              <strong>Create account</strong>
+              <span>set up a new workspace identity</span>
             </div>
             <div>
-              <strong>POST /signin</strong>
-              <span>returns a JWT</span>
+              <strong>Quick sign in</strong>
+              <span>get back into your workspace fast</span>
             </div>
             <div>
-              <strong>POST /room</strong>
-              <span>needs Bearer auth</span>
+              <strong>Private room</strong>
+              <span>launch a focused sketching space</span>
             </div>
           </div>
         </div>
 
-        <div className={styles.heroPanel} id="auth" aria-label="Authentication panel">
+        <div className={styles.heroPanel} id="auth" aria-label="Quick setup panel">
           <div className={styles.panelTop}>
             <span className={styles.windowDots}>
               <i />
               <i />
               <i />
             </span>
-          <span>{session ? "Authenticated session" : "Connect to backend"}</span>
+            <span>{session ? "Signed in" : "Open auth"}</span>
             <span className={styles.panelBadge}>{session ? "Live" : "Idle"}</span>
           </div>
 
-          <div className={styles.authTabs} role="tablist" aria-label="Authentication mode">
+          <div className={styles.authTabs} role="tablist" aria-label="Sign in mode">
             <button
               type="button"
               className={mode === "signin" ? styles.authTabActive : styles.authTab}
@@ -437,21 +428,19 @@ export default function Home() {
           <div className={styles.panelFooter}>
             <div>
               <span className={styles.panelLabel}>Status</span>
-              <strong>{session ? "Session stored locally" : status}</strong>
+              <strong>{session ? "Connected" : status}</strong>
             </div>
-            {session ? (
-              <span className={styles.tokenPill}>{shortenToken(session.token)}</span>
-            ) : (
-              <span className={styles.tokenPillMuted}>JWT will appear here</span>
-            )}
+            <span className={session ? styles.tokenPill : styles.tokenPillMuted}>
+              {session ? "Active" : "Not connected"}
+            </span>
           </div>
         </div>
       </section>
 
       <section className={styles.featureSection} id="features">
         <div className={styles.sectionHeader}>
-          <p className={styles.kicker}>Why it matches the backend</p>
-          <h2>The UI now follows the server contract instead of guessing at it.</h2>
+          <p className={styles.kicker}>Why it feels good</p>
+          <h2>The UI stays simple, fast, and focused on the work.</h2>
         </div>
 
         <div className={styles.featureGrid}>
@@ -467,7 +456,7 @@ export default function Home() {
 
       <section className={styles.workflowSection} id="rooms">
         <div className={styles.workflowCopy}>
-          <p className={styles.kicker}>Protected room creation</p>
+          <p className={styles.kicker}>Rooms</p>
           <h2>Create a room or join an existing one in one quick step.</h2>
         </div>
 
@@ -478,7 +467,7 @@ export default function Home() {
                 <span className={styles.panelLabel}>Create room</span>
                 <strong>Start a fresh space for your team.</strong>
               </div>
-              <span className={styles.roomPill}>{session ? "Authenticated" : "Sign in first"}</span>
+              <span className={styles.roomPill}>{session ? "Ready" : "Sign in first"}</span>
             </div>
 
             <label className={styles.field}>
@@ -502,7 +491,7 @@ export default function Home() {
             </button>
 
             <p className={styles.roomHint}>
-              The backend stores the room by slug, and we jump straight into it after creation.
+              Your new room opens immediately after creation.
             </p>
           </form>
 
@@ -536,7 +525,7 @@ export default function Home() {
             </button>
 
             <p className={styles.roomHint}>
-              We verify the slug with the backend before sending you to the room page.
+              Enter a room slug to jump straight into an existing space.
             </p>
           </form>
 
@@ -545,7 +534,7 @@ export default function Home() {
             <strong>{roomStatus || joinStatus || "No room selected yet."}</strong>
             <p>
               {session
-                ? `Authenticated as ${session.userId ?? "the current user"}. Creation uses the bearer token automatically.`
+                ? "You’re signed in and ready to create rooms."
                 : "Join is open; create still needs a signed-in session."}
             </p>
           </div>

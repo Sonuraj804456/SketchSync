@@ -1,5 +1,6 @@
 import express from "express";
 import jwt from "jsonwebtoken";
+import { randomUUID } from "crypto";
 import { JWT_SECRET } from '@repo/backend-common/config';
 import { middleware } from "./middleware";
 import { CreateUserSchema, SigninSchema, CreateRoomSchema } from "@repo/common/types";
@@ -70,6 +71,33 @@ app.post("/signin", async (req, res) => {
     res.json({
         token
     })
+})
+
+app.post("/guest", async (_req, res) => {
+    try {
+        const guestId = randomUUID();
+        const user = await prismaClient.user.create({
+            data: {
+                email: `guest-${guestId}@guest.local`,
+                password: guestId,
+                name: "Guest",
+            }
+        });
+
+        const token = jwt.sign({
+            userId: user.id
+        }, JWT_SECRET);
+
+        res.json({
+            token,
+            userId: user.id,
+        });
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({
+            message: "Unable to create a guest session"
+        });
+    }
 })
 
 app.post("/room", middleware, async (req, res) => {

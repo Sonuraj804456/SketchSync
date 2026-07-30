@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { proxyJson } from "../../_backend";
 
-const allowedActions = new Set(["signup", "signin"]);
+const allowedActions = new Set(["signup", "signin", "guest"]);
 
 export async function POST(
   request: NextRequest,

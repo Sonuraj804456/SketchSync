@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  type CSSProperties,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -19,8 +21,19 @@ type RoomRecord = {
   createdAt: string;
 };
 
-type Tool = "select" | "rectangle" | "diamond" | "circle" | "arrow" | "line" | "pen" | "text";
-type DrawingTool = Exclude<Tool, "select" | "text">;
+type Tool = "pan" | "select" | "rectangle" | "diamond" | "circle" | "arrow" | "line" | "pen" | "eraser" | "text";
+type DrawingTool = Exclude<Tool, "pan" | "select" | "eraser" | "text">;
+type BoardBackground = "paper" | "mint" | "warm" | "ink";
+type ShapeColorId = "slate" | "indigo" | "emerald" | "amber" | "rose";
+type MenuActionId =
+  | "open"
+  | "save"
+  | "export"
+  | "collaboration"
+  | "palette"
+  | "find"
+  | "help"
+  | "reset";
 
 type Point = { x: number; y: number };
 type Viewport = { x: number; y: number; scale: number };
@@ -82,6 +95,7 @@ type Shape = RectangleShape | DiamondShape | CircleShape | LineShape | PenShape 
 type Interaction =
   | { kind: "draw"; tool: DrawingTool; start: Point }
   | { kind: "move"; shapeId: string; start: Point; origin: Shape }
+  | { kind: "erase" }
   | { kind: "pan"; start: Point; origin: Viewport }
   | null;
 
@@ -96,12 +110,100 @@ type RoomResponse =
   | { ok: true; room: RoomRecord | null }
   | { ok: false; message: string };
 
-const STORAGE_PREFIX = "sketchsync-room";
+type ChatRecord = {
+  id: number;
+  roomId: number;
+  message: string;
+  userId: string;
+};
+
+type ChatsResponse =
+  | { ok?: boolean; messages?: ChatRecord[] }
+  | { message?: string };
+
 const BACKEND_KEY = "/api/rooms";
+const WS_BACKEND_URL =
+  process.env.NEXT_PUBLIC_WS_BACKEND_URL ?? "ws://127.0.0.1:8080";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "";
 const MIN_SCALE = 0.35;
 const MAX_SCALE = 2.5;
+const BOARD_BACKGROUND_STORAGE_KEY = "sketchsync-board-background";
+const SHAPE_COLOR_STORAGE_KEY = "sketchsync-shape-color";
+const SHAPE_COLORS: Array<{
+  id: ShapeColorId;
+  label: string;
+  stroke: string;
+  fill: string;
+}> = [
+  { id: "slate", label: "Slate", stroke: "#1f2937", fill: "rgba(31, 41, 55, 0.12)" },
+  { id: "indigo", label: "Indigo", stroke: "#4f46e5", fill: "rgba(79, 70, 229, 0.14)" },
+  { id: "emerald", label: "Emerald", stroke: "#16a34a", fill: "rgba(22, 163, 74, 0.14)" },
+  { id: "amber", label: "Amber", stroke: "#d97706", fill: "rgba(217, 119, 6, 0.16)" },
+  { id: "rose", label: "Rose", stroke: "#e11d48", fill: "rgba(225, 29, 72, 0.14)" },
+];
+const BOARD_BACKGROUNDS: Record<
+  BoardBackground,
+  {
+    page: CSSProperties;
+    stage: CSSProperties;
+  }
+> = {
+  paper: {
+    page: {
+      backgroundColor: "#f4f6fb",
+      backgroundImage:
+        "radial-gradient(circle at 20% 10%, rgba(99, 102, 241, 0.08), transparent 24%), radial-gradient(circle at 80% 20%, rgba(16, 185, 129, 0.06), transparent 20%), linear-gradient(180deg, #fbfbfd 0%, #f4f6fb 100%)",
+    },
+    stage: {
+      backgroundColor: "#fafafa",
+      backgroundImage:
+        "linear-gradient(rgba(15, 23, 42, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(15, 23, 42, 0.03) 1px, transparent 1px), #fafafa",
+      backgroundSize: "48px 48px",
+    },
+  },
+  mint: {
+    page: {
+      backgroundColor: "#eefcf4",
+      backgroundImage:
+        "radial-gradient(circle at 20% 10%, rgba(34, 197, 94, 0.12), transparent 24%), radial-gradient(circle at 80% 20%, rgba(14, 165, 233, 0.08), transparent 20%), linear-gradient(180deg, #f7fffb 0%, #eefcf4 100%)",
+    },
+    stage: {
+      backgroundColor: "#f8fffb",
+      backgroundImage:
+        "linear-gradient(rgba(15, 23, 42, 0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(15, 23, 42, 0.025) 1px, transparent 1px), #f8fffb",
+      backgroundSize: "48px 48px",
+    },
+  },
+  warm: {
+    page: {
+      backgroundColor: "#fff4eb",
+      backgroundImage:
+        "radial-gradient(circle at 20% 10%, rgba(251, 146, 60, 0.12), transparent 24%), radial-gradient(circle at 80% 20%, rgba(244, 114, 182, 0.08), transparent 20%), linear-gradient(180deg, #fffaf7 0%, #fff4eb 100%)",
+    },
+    stage: {
+      backgroundColor: "#fffaf5",
+      backgroundImage:
+        "linear-gradient(rgba(15, 23, 42, 0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(15, 23, 42, 0.025) 1px, transparent 1px), #fffaf5",
+      backgroundSize: "48px 48px",
+    },
+  },
+  ink: {
+    page: {
+      backgroundColor: "#e2e8f0",
+      backgroundImage:
+        "radial-gradient(circle at 20% 10%, rgba(59, 130, 246, 0.1), transparent 24%), radial-gradient(circle at 80% 20%, rgba(148, 163, 184, 0.12), transparent 20%), linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%)",
+    },
+    stage: {
+      backgroundColor: "#f1f5f9",
+      backgroundImage:
+        "linear-gradient(rgba(15, 23, 42, 0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(15, 23, 42, 0.04) 1px, transparent 1px), #f1f5f9",
+      backgroundSize: "48px 48px",
+    },
+  },
+};
 
 const TOOLS: Array<{ id: Tool; label: string; icon: string }> = [
+  { id: "pan", label: "Pan", icon: "✋" },
   { id: "select", label: "Select", icon: "↖" },
   { id: "rectangle", label: "Rect", icon: "▭" },
   { id: "diamond", label: "Diamond", icon: "◇" },
@@ -109,8 +211,30 @@ const TOOLS: Array<{ id: Tool; label: string; icon: string }> = [
   { id: "arrow", label: "Arrow", icon: "→" },
   { id: "line", label: "Line", icon: "—" },
   { id: "pen", label: "Pen", icon: "✎" },
+  { id: "eraser", label: "Eraser", icon: "⌫" },
   { id: "text", label: "Text", icon: "A" },
 ];
+
+const MENU_ACTIONS: Array<{
+  id: MenuActionId;
+  label: string;
+  shortcut?: string;
+  accent?: boolean;
+}> = [
+  { id: "open", label: "Open", shortcut: "Cmd+O" },
+  { id: "save", label: "Save to..." },
+  { id: "export", label: "Export image...", shortcut: "Cmd+Shift+E" },
+  { id: "collaboration", label: "Live collaboration..." },
+  { id: "palette", label: "Command palette", shortcut: "Cmd+/" , accent: true },
+  { id: "find", label: "Find on canvas", shortcut: "Cmd+F" },
+  { id: "help", label: "Help", shortcut: "?" },
+  { id: "reset", label: "Reset the canvas" },
+];
+
+function getShapeColor(colorId: ShapeColorId): (typeof SHAPE_COLORS)[number] {
+  const fallbackColor = SHAPE_COLORS[0];
+  return SHAPE_COLORS.find((color) => color.id === colorId) ?? fallbackColor!;
+}
 
 function createId() {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
@@ -250,11 +374,11 @@ function moveShape(shape: Shape, deltaX: number, deltaY: number): Shape {
   }
 }
 
-function createDraftShape(tool: DrawingTool, start: Point): Shape {
+function createDraftShape(tool: DrawingTool, start: Point, color: { stroke: string; fill: string }): Shape {
   const base = {
     id: createId(),
-    stroke: "#1f2937",
-    fill: "rgba(255, 255, 255, 0.25)",
+    stroke: color.stroke,
+    fill: color.fill,
     strokeWidth: 2.5,
   };
 
@@ -269,7 +393,7 @@ function createDraftShape(tool: DrawingTool, start: Point): Shape {
     case "arrow":
       return { ...base, type: tool, x1: start.x, y1: start.y, x2: start.x, y2: start.y };
     case "pen":
-      return { ...base, type: "pen", points: [start], stroke: "#16a34a", fill: "none" };
+      return { ...base, type: "pen", points: [start], fill: "none" };
   }
 }
 
@@ -365,6 +489,67 @@ function findShapeAtPoint(shapes: Shape[], point: Point) {
   return null;
 }
 
+function removeShapeAtPoint(shapes: Shape[], point: Point) {
+  const target = findShapeAtPoint(shapes, point);
+  if (!target) {
+    return { shapes, removedShape: null };
+  }
+
+  return {
+    shapes: shapes.filter((shape) => shape.id !== target.id),
+    removedShape: target,
+  };
+}
+
+function serializeBoard(roomSlug: string, shapes: Shape[], viewport: Viewport) {
+  return JSON.stringify(
+    {
+      version: 1,
+      roomSlug,
+      shapes,
+      viewport,
+      exportedAt: new Date().toISOString(),
+    },
+    null,
+    2
+  );
+}
+
+function downloadTextFile(filename: string, contents: string, mimeType: string) {
+  const blob = new Blob([contents], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function centerViewportOnShape(shape: Shape, viewport: Viewport, stageWidth: number, stageHeight: number) {
+  const bounds = shapeBounds(shape);
+  const centerX = bounds.x + bounds.width / 2;
+  const centerY = bounds.y + bounds.height / 2;
+  return {
+    ...viewport,
+    x: stageWidth / 2 - centerX * viewport.scale,
+    y: stageHeight / 2 - centerY * viewport.scale,
+  };
+}
+
+function findMatchingShapes(shapes: Shape[], query: string) {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) {
+    return [];
+  }
+
+  return shapes.filter((shape) => {
+    if (shape.type === "text") {
+      return shape.text.toLowerCase().includes(normalizedQuery);
+    }
+    return shape.type.toLowerCase().includes(normalizedQuery);
+  });
+}
+
 async function readRoom(response: Response): Promise<RoomResponse> {
   let payload: unknown = null;
   try {
@@ -388,8 +573,26 @@ async function readRoom(response: Response): Promise<RoomResponse> {
     message:
       payload && typeof payload === "object" && "message" in payload
         ? String((payload as { message?: unknown }).message ?? "Room lookup failed")
-        : "Room lookup failed",
+      : "Room lookup failed",
   };
+}
+
+function getInviteOrigin() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  if (APP_URL) {
+    return APP_URL.replace(/\/$/, "");
+  }
+
+  const { hostname, port } = window.location;
+
+  if (hostname === "localhost" || hostname === "127.0.0.1") {
+    return `http://127.0.0.1${port ? `:${port}` : ""}`;
+  }
+
+  return window.location.origin;
 }
 
 export default function RoomPage() {
@@ -399,6 +602,12 @@ export default function RoomPage() {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const draftShapeRef = useRef<Shape | null>(null);
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const commandInputRef = useRef<HTMLInputElement | null>(null);
+  const findInputRef = useRef<HTMLInputElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
   const [room, setRoom] = useState<RoomRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -408,9 +617,21 @@ export default function RoomPage() {
   const [interaction, setInteraction] = useState<Interaction>(null);
   const [draftShape, setDraftShape] = useState<Shape | null>(null);
   const [textEditor, setTextEditor] = useState<TextEditorState>(null);
-  const [readyToPersist, setReadyToPersist] = useState(false);
   const [viewport, setViewport] = useState<Viewport>({ x: 0, y: 0, scale: 1 });
   const [hint, setHint] = useState("Click on the board to start drawing.");
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [isFindOpen, setIsFindOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [commandQuery, setCommandQuery] = useState("");
+  const [findQuery, setFindQuery] = useState("");
+  const [boardBackground, setBoardBackground] = useState<BoardBackground>("paper");
+  const [shapeColorId, setShapeColorId] = useState<ShapeColorId>("slate");
+  const [authToken, setAuthToken] = useState<string>("");
+  const activeTextShapeId = textEditor?.shapeId;
+  const canvasHydratedRef = useRef(false);
+  const suppressCanvasBroadcastRef = useRef(false);
+  const lastAppliedCanvasMessageRef = useRef("");
 
   useEffect(() => {
     const rect = stageRef.current?.getBoundingClientRect();
@@ -420,6 +641,48 @@ export default function RoomPage() {
       );
     }
   }, []);
+
+  useEffect(() => {
+    const storedToken = window.localStorage.getItem("sketchsync-token");
+    if (storedToken) {
+      setAuthToken(storedToken);
+    }
+  }, []);
+
+  useEffect(() => {
+    const savedBackground = window.localStorage.getItem(BOARD_BACKGROUND_STORAGE_KEY) as BoardBackground | null;
+    if (savedBackground && savedBackground in BOARD_BACKGROUNDS) {
+      setBoardBackground(savedBackground);
+    }
+  }, []);
+
+  useEffect(() => {
+    const savedColor = window.localStorage.getItem(SHAPE_COLOR_STORAGE_KEY) as ShapeColorId | null;
+    if (savedColor && SHAPE_COLORS.some((color) => color.id === savedColor)) {
+      setShapeColorId(savedColor);
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(BOARD_BACKGROUND_STORAGE_KEY, boardBackground);
+  }, [boardBackground]);
+
+  useEffect(() => {
+    window.localStorage.setItem(SHAPE_COLOR_STORAGE_KEY, shapeColorId);
+  }, [shapeColorId]);
+
+  useEffect(() => {
+    function handlePointerDown(event: globalThis.PointerEvent) {
+      const target = event.target as Node | null;
+      const menuContains = target && ((menuRef.current && menuRef.current.contains(target)) || (menuButtonRef.current && menuButtonRef.current.contains(target)));
+      if (isMenuOpen && target && !menuContains) {
+        setIsMenuOpen(false);
+      }
+    }
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => window.removeEventListener("pointerdown", handlePointerDown);
+  }, [isMenuOpen]);
 
   useEffect(() => {
     if (!slug) {
@@ -470,40 +733,317 @@ export default function RoomPage() {
   }, [slug]);
 
   useEffect(() => {
-    if (!slug) return;
-    const key = `${STORAGE_PREFIX}:${slug}`;
-    const stored = window.localStorage.getItem(key);
-    if (stored) {
+    const roomId = room?.id;
+    if (!roomId) {
+      canvasHydratedRef.current = false;
+      lastAppliedCanvasMessageRef.current = "";
+      return;
+    }
+
+    canvasHydratedRef.current = false;
+    lastAppliedCanvasMessageRef.current = "";
+    return undefined;
+  }, [room?.id]);
+
+  useEffect(() => {
+    const roomId = room?.id;
+    if (!roomId) {
+      return;
+    }
+
+    const socket = new WebSocket(`${WS_BACKEND_URL}/?token=${encodeURIComponent(authToken)}`);
+    wsRef.current = socket;
+
+    socket.addEventListener("open", () => {
+      socket.send(JSON.stringify({ type: "join_room", roomId }));
+    });
+
+    socket.addEventListener("message", (event) => {
+      if (typeof event.data !== "string") {
+        return;
+      }
+
       try {
-        const parsed = JSON.parse(stored) as Shape[];
-        if (Array.isArray(parsed)) {
-          setShapes(parsed);
+        const payload = JSON.parse(event.data) as {
+          type?: string;
+          roomId?: number;
+          shapes?: Shape[];
+        };
+
+        if (payload.type === "canvas_sync" && payload.roomId === roomId) {
+          suppressCanvasBroadcastRef.current = true;
+          canvasHydratedRef.current = true;
+          lastAppliedCanvasMessageRef.current = JSON.stringify(payload.shapes ?? []);
+          setShapes(Array.isArray(payload.shapes) ? payload.shapes : []);
+          setHint("Canvas synced.");
         }
       } catch {
-        window.localStorage.removeItem(key);
+        // Ignore malformed messages.
+      }
+    });
+
+    socket.addEventListener("close", () => {
+      setHint("Canvas disconnected.");
+    });
+
+    socket.addEventListener("error", () => {
+      setHint("Canvas connection failed.");
+    });
+
+    return () => {
+      try {
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({ type: "leave_room", room: roomId }));
+        }
+      } catch {
+        // Ignore cleanup errors.
+      }
+
+      socket.close();
+      if (wsRef.current === socket) {
+        wsRef.current = null;
+      }
+    };
+  }, [room?.id, authToken]);
+
+  useEffect(() => {
+    const roomId = room?.id;
+    const socket = wsRef.current;
+
+    if (!roomId || !socket || socket.readyState !== WebSocket.OPEN || !canvasHydratedRef.current) {
+      return;
+    }
+
+    if (suppressCanvasBroadcastRef.current) {
+      suppressCanvasBroadcastRef.current = false;
+      return;
+    }
+
+    socket.send(
+      JSON.stringify({
+        type: "canvas_update",
+        roomId,
+        shapes,
+      })
+    );
+  }, [room?.id, shapes]);
+
+  useEffect(() => {
+    const roomId = room?.id;
+    if (!roomId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function syncFromHistory() {
+      try {
+        const response = await fetch(`/api/chats/${roomId}`);
+        const result = (await response.json()) as ChatsResponse;
+
+        if (cancelled || !response.ok || !result || typeof result !== "object" || !("messages" in result)) {
+          return;
+        }
+
+        const latestMessage = result.messages?.[0];
+        if (!latestMessage?.message || latestMessage.message === lastAppliedCanvasMessageRef.current) {
+          return;
+        }
+
+        let parsed: unknown = null;
+        try {
+          parsed = JSON.parse(latestMessage.message);
+        } catch {
+          return;
+        }
+
+        if (!Array.isArray(parsed)) {
+          return;
+        }
+
+        lastAppliedCanvasMessageRef.current = latestMessage.message;
+        suppressCanvasBroadcastRef.current = true;
+        canvasHydratedRef.current = true;
+        setShapes(parsed as Shape[]);
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+          setHint("Canvas synced from history.");
+        }
+      } catch {
+        // Ignore polling errors; websocket remains the primary path.
       }
     }
-    setReadyToPersist(true);
-  }, [slug]);
+
+    void syncFromHistory();
+    const interval = window.setInterval(syncFromHistory, 1200);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [room?.id]);
 
   useEffect(() => {
-    if (!slug || !readyToPersist) return;
-    window.localStorage.setItem(`${STORAGE_PREFIX}:${slug}`, JSON.stringify(shapes));
-  }, [shapes, slug, readyToPersist]);
-
-  useEffect(() => {
-    if (textEditor) {
+    if (activeTextShapeId) {
       const frame = window.requestAnimationFrame(() => {
-        editorRef.current?.focus();
-        editorRef.current?.setSelectionRange(textEditor.value.length, textEditor.value.length);
+        const editor = editorRef.current;
+        if (!editor) {
+          return;
+        }
+
+        editor.focus();
+        const length = editor.value.length;
+        editor.setSelectionRange(length, length);
       });
       return () => window.cancelAnimationFrame(frame);
     }
     return undefined;
-  }, [textEditor?.shapeId]);
+  }, [activeTextShapeId]);
+
+  const handleExportImage = useCallback(async () => {
+    const svgNode = svgRef.current;
+    const stageNode = stageRef.current;
+    if (!svgNode || !stageNode) {
+      setHint("Nothing to export yet.");
+      return;
+    }
+
+    const rect = stageNode.getBoundingClientRect();
+    const width = Math.max(1, Math.round(rect.width));
+    const height = Math.max(1, Math.round(rect.height));
+    const cloned = svgNode.cloneNode(true) as SVGSVGElement;
+    cloned.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    cloned.setAttribute("width", String(width));
+    cloned.setAttribute("height", String(height));
+
+    const serialized = new XMLSerializer().serializeToString(cloned);
+    const blob = new Blob([serialized], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+
+    try {
+      const image = new Image();
+      image.decoding = "async";
+      const pngBlob = await new Promise<Blob | null>((resolve, reject) => {
+        image.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const context = canvas.getContext("2d");
+          if (!context) {
+            reject(new Error("Canvas rendering is not available."));
+            return;
+          }
+
+          context.fillStyle = "#ffffff";
+          context.fillRect(0, 0, width, height);
+          context.drawImage(image, 0, 0, width, height);
+          canvas.toBlob((result) => resolve(result), "image/png");
+        };
+        image.onerror = () => reject(new Error("Could not render the image."));
+        image.src = url;
+      });
+
+      if (!pngBlob) {
+        throw new Error("Could not export the canvas.");
+      }
+
+      const pngUrl = URL.createObjectURL(pngBlob);
+      const anchor = document.createElement("a");
+      anchor.href = pngUrl;
+      anchor.download = `${room?.slug ?? "sketchsync"}.png`;
+      anchor.click();
+      URL.revokeObjectURL(pngUrl);
+      setHint("Image exported.");
+      setIsMenuOpen(false);
+    } catch {
+      downloadTextFile(`${room?.slug ?? "sketchsync"}.svg`, serialized, "image/svg+xml;charset=utf-8");
+      setHint("Exported as SVG instead.");
+      setIsMenuOpen(false);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }, [room?.slug]);
+
+  useEffect(() => {
+    if (!isCommandPaletteOpen) {
+      return undefined;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      commandInputRef.current?.focus();
+      commandInputRef.current?.select();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [isCommandPaletteOpen]);
+
+  useEffect(() => {
+    if (!isFindOpen) {
+      return undefined;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      findInputRef.current?.focus();
+      findInputRef.current?.select();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [isFindOpen]);
 
   useEffect(() => {
     function handleKeyDown(event: globalThis.KeyboardEvent) {
+      const isShortcut = event.metaKey || event.ctrlKey;
+
+      if (isShortcut && event.key.toLowerCase() === "o") {
+        event.preventDefault();
+        handleOpenFile();
+        return;
+      }
+
+      if (isShortcut && event.shiftKey && event.key.toLowerCase() === "e") {
+        event.preventDefault();
+        void handleExportImage();
+        return;
+      }
+
+      if (isShortcut && event.key === "/") {
+        event.preventDefault();
+        setIsCommandPaletteOpen(true);
+        setIsMenuOpen(false);
+        return;
+      }
+
+      if (isShortcut && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        setIsFindOpen(true);
+        setIsMenuOpen(false);
+        return;
+      }
+
+      if (event.key === "?" || (event.shiftKey && event.key === "/")) {
+        event.preventDefault();
+        setIsHelpOpen(true);
+        setIsMenuOpen(false);
+        return;
+      }
+
+      if (event.key === "Escape") {
+        if (isCommandPaletteOpen) {
+          setIsCommandPaletteOpen(false);
+          return;
+        }
+        if (isFindOpen) {
+          setIsFindOpen(false);
+          setFindQuery("");
+          return;
+        }
+        if (isHelpOpen) {
+          setIsHelpOpen(false);
+          return;
+        }
+        if (isMenuOpen) {
+          setIsMenuOpen(false);
+          return;
+        }
+      }
+
       if (textEditor) {
         if (event.key === "Escape") {
           event.preventDefault();
@@ -529,19 +1069,20 @@ export default function RoomPage() {
         setHint("Shape deleted.");
       }
 
-      const hotkey = Number(event.key);
-      if (hotkey >= 1 && hotkey <= 8) {
+      const hotkey = event.key === "0" ? 10 : Number(event.key);
+      if (hotkey >= 1 && hotkey <= TOOLS.length) {
         const nextTool = TOOLS[hotkey - 1]?.id;
+        const nextLabel = TOOLS[hotkey - 1]?.label;
         if (nextTool) {
           setTool(nextTool);
-          setHint(`Switched to ${nextTool}.`);
+          setHint(`Switched to ${nextLabel?.toLowerCase() ?? nextTool}.`);
         }
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedId, textEditor]);
+  }, [selectedId, textEditor, isMenuOpen, isCommandPaletteOpen, isFindOpen, isHelpOpen, handleExportImage]);
 
   function zoomAt(anchor: Point, nextScale: number) {
     const boundedScale = clamp(nextScale, MIN_SCALE, MAX_SCALE);
@@ -577,6 +1118,7 @@ export default function RoomPage() {
     const screenPoint = readPoint(event, stage);
     const worldPoint = screenToWorld(screenPoint, viewport);
     const svg = event.currentTarget;
+    const shapeColor = getShapeColor(shapeColorId);
 
     if (tool === "text") {
       event.preventDefault();
@@ -589,7 +1131,7 @@ export default function RoomPage() {
         y: worldPoint.y,
         text: "",
         fontSize: 56,
-        stroke: "#16a34a",
+        stroke: shapeColor.stroke,
         fill: "transparent",
         strokeWidth: 0,
       };
@@ -606,9 +1148,32 @@ export default function RoomPage() {
       return;
     }
 
+    if (tool === "eraser") {
+      event.preventDefault();
+      svg.setPointerCapture(event.pointerId);
+      setSelectedId(null);
+      setInteraction({ kind: "erase" });
+
+      setShapes((current) => {
+        const next = removeShapeAtPoint(current, worldPoint);
+        if (!next.removedShape) {
+          return current;
+        }
+
+        if (textEditor?.shapeId === next.removedShape.id) {
+          setTextEditor(null);
+        }
+
+        setHint(`Erased ${next.removedShape.type}.`);
+        return next.shapes;
+      });
+
+      return;
+    }
+
     svg.setPointerCapture(event.pointerId);
 
-    if (tool === "select") {
+    if (tool === "pan" || tool === "select") {
       const hitShape = findShapeAtPoint(shapes, worldPoint);
       if (hitShape) {
         setSelectedId(hitShape.id);
@@ -623,7 +1188,7 @@ export default function RoomPage() {
       return;
     }
 
-    const draft = createDraftShape(tool as DrawingTool, worldPoint);
+    const draft = createDraftShape(tool as DrawingTool, worldPoint, shapeColor);
     setSelectedId(draft.id);
     draftShapeRef.current = draft;
     setDraftShape(draft);
@@ -654,6 +1219,23 @@ export default function RoomPage() {
         x: interaction.origin.x + (screenPoint.x - interaction.start.x),
         y: interaction.origin.y + (screenPoint.y - interaction.start.y),
         scale: interaction.origin.scale,
+      });
+      return;
+    }
+
+    if (interaction.kind === "erase") {
+      setShapes((current) => {
+        const next = removeShapeAtPoint(current, worldPoint);
+        if (!next.removedShape) {
+          return current;
+        }
+
+        if (textEditor?.shapeId === next.removedShape.id) {
+          setTextEditor(null);
+        }
+
+        setHint(`Erased ${next.removedShape.type}.`);
+        return next.shapes;
       });
       return;
     }
@@ -726,6 +1308,25 @@ export default function RoomPage() {
     }
   }
 
+  async function copyShareLink(url: string) {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(url);
+      return true;
+    }
+
+    const tempInput = document.createElement("input");
+    tempInput.value = url;
+    tempInput.setAttribute("readonly", "true");
+    tempInput.style.position = "absolute";
+    tempInput.style.left = "-9999px";
+    document.body.appendChild(tempInput);
+    tempInput.select();
+
+    const copied = document.execCommand("copy");
+    document.body.removeChild(tempInput);
+    return copied;
+  }
+
   function renderShape(shape: Shape) {
     const isSelected = shape.id === selectedId;
     const selectedStroke = isSelected ? "#4f46e5" : shape.stroke;
@@ -775,7 +1376,7 @@ export default function RoomPage() {
         const bounds = shapeBounds(shape);
         return (
           <g key={shape.id}>
-            <text x={shape.x} y={shape.y} fill="#16a34a" fontFamily="Comic Sans MS, Segoe Print, Bradley Hand, cursive" fontSize={shape.fontSize} fontWeight="600" dominantBaseline="hanging">
+            <text x={shape.x} y={shape.y} fill={shape.stroke} fontFamily="Comic Sans MS, Segoe Print, Bradley Hand, cursive" fontSize={shape.fontSize} fontWeight="600" dominantBaseline="hanging">
               {shape.text}
             </text>
             {isSelected ? <rect x={bounds.x - 8} y={bounds.y - 8} width={bounds.width + 16} height={bounds.height + 16} rx="12" fill="none" stroke="#4f46e5" strokeDasharray="8 8" strokeWidth="2" pointerEvents="none" /> : null}
@@ -786,27 +1387,201 @@ export default function RoomPage() {
   }
 
   async function handleShare() {
+    if (!room?.slug) {
+      setHint("Open a room first to share it.");
+      return;
+    }
+
+    const shareUrl = new URL(`/rooms/${encodeURIComponent(room.slug)}`, getInviteOrigin()).toString();
+    const shareData = {
+      title: "SketchSync room",
+      text: `Join my SketchSync room: ${room.slug}`,
+      url: shareUrl,
+    };
+
     try {
-      await navigator.clipboard.writeText(window.location.href);
-      setHint("Room link copied.");
+      if (navigator.share && (!navigator.canShare || navigator.canShare(shareData))) {
+        await navigator.share(shareData);
+        setHint("Share sheet opened.");
+        return;
+      }
+
+      const copied = await copyShareLink(shareUrl);
+      setHint(copied ? "Room link copied." : "Could not copy link.");
     } catch {
-      setHint("Could not copy link.");
+      try {
+        const copied = await copyShareLink(shareUrl);
+        setHint(copied ? "Room link copied." : "Could not copy link.");
+      } catch {
+        setHint("Could not share this room right now.");
+      }
     }
   }
+
+  function handleOpenFile() {
+    fileInputRef.current?.click();
+    setIsMenuOpen(false);
+  }
+
+  function handleSaveBoard() {
+    if (!room?.slug) {
+      setHint("Open a room first to save it.");
+      return;
+    }
+
+    downloadTextFile(
+      `${room.slug}-sketchsync.json`,
+      serializeBoard(room.slug, shapes, viewport),
+      "application/json;charset=utf-8"
+    );
+    setHint("Board saved.");
+    setIsMenuOpen(false);
+  }
+
+  function handleResetCanvas() {
+    const shouldReset = window.confirm("Reset the canvas and delete every shape?");
+    if (!shouldReset) {
+      return;
+    }
+
+    setShapes([]);
+    setSelectedId(null);
+    setInteraction(null);
+    setDraftShape(null);
+    draftShapeRef.current = null;
+    setTextEditor(null);
+    setHint("Canvas reset.");
+    setIsMenuOpen(false);
+  }
+
+  function handleOpenLiveCollaboration() {
+    void handleShare();
+    setIsMenuOpen(false);
+  }
+
+  function handleOpenCommandPalette() {
+    setCommandQuery("");
+    setIsCommandPaletteOpen(true);
+    setIsMenuOpen(false);
+  }
+
+  function handleOpenFind() {
+    setFindQuery("");
+    setIsFindOpen(true);
+    setIsMenuOpen(false);
+  }
+
+  function handleOpenHelp() {
+    setIsHelpOpen(true);
+    setIsMenuOpen(false);
+  }
+
+  function runMenuAction(actionId: MenuActionId) {
+    setIsCommandPaletteOpen(false);
+    setIsFindOpen(false);
+    setIsHelpOpen(false);
+    switch (actionId) {
+      case "open":
+        handleOpenFile();
+        return;
+      case "save":
+        handleSaveBoard();
+        return;
+      case "export":
+        void handleExportImage();
+        return;
+      case "collaboration":
+        handleOpenLiveCollaboration();
+        return;
+      case "palette":
+        handleOpenCommandPalette();
+        return;
+      case "find":
+        handleOpenFind();
+        return;
+      case "help":
+        handleOpenHelp();
+        return;
+      case "reset":
+        handleResetCanvas();
+        return;
+    }
+  }
+
+  function handleFileInputChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+
+    void (async () => {
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text) as {
+          shapes?: Shape[];
+          viewport?: Viewport;
+          roomSlug?: string;
+        };
+
+        if (Array.isArray(parsed.shapes)) {
+          setShapes(parsed.shapes);
+        }
+        if (parsed.viewport && typeof parsed.viewport === "object") {
+          setViewport(parsed.viewport);
+        }
+        setSelectedId(null);
+        setInteraction(null);
+        setDraftShape(null);
+        draftShapeRef.current = null;
+        setTextEditor(null);
+        setHint("Board opened.");
+        setIsMenuOpen(false);
+      } catch {
+        setHint("Could not open that file.");
+      }
+    })();
+  }
+
+  function jumpToShape(shape: Shape) {
+    const stage = stageRef.current;
+    if (!stage) {
+      return;
+    }
+
+    const rect = stage.getBoundingClientRect();
+    setSelectedId(shape.id);
+    setViewport((current) => centerViewportOnShape(shape, current, rect.width, rect.height));
+    setHint(`Focused ${shape.type}.`);
+  }
+
+  const findMatches = findMatchingShapes(shapes, findQuery);
+  const commandResults = MENU_ACTIONS.filter((action) =>
+    action.label.toLowerCase().includes(commandQuery.trim().toLowerCase())
+  );
+  const boardStyles = BOARD_BACKGROUNDS[boardBackground];
+  const selectedShapeColor = getShapeColor(shapeColorId);
 
   const zoomPercent = Math.round(viewport.scale * 100);
 
   return (
-    <main className={styles.page}>
-      <div className={styles.stage} ref={stageRef} onWheel={handleWheel}>
+    <main className={styles.page} style={boardStyles.page}>
+      <div className={styles.stage} ref={stageRef} onWheel={handleWheel} style={boardStyles.stage}>
         <div className={styles.topChrome}>
-          <button className={styles.menuButton} type="button" aria-label="Menu">
+          <button
+            ref={menuButtonRef}
+            className={styles.menuButton}
+            type="button"
+            aria-label="Menu"
+            aria-expanded={isMenuOpen}
+            onClick={() => setIsMenuOpen((current) => !current)}
+          >
             ☰
           </button>
 
           <div className={styles.toolbar} role="toolbar" aria-label="Canvas tools">
             {TOOLS.map((entry, index) => (
-              <button
+          <button
                 key={entry.id}
                 type="button"
                 className={tool === entry.id ? styles.toolButtonActive : styles.toolButton}
@@ -821,7 +1596,7 @@ export default function RoomPage() {
                 title={entry.label}
               >
                 <span className={styles.toolIcon}>{entry.icon}</span>
-                <span className={styles.toolHotkey}>{index + 1}</span>
+                <span className={styles.toolHotkey}>{index === 9 ? 0 : index + 1}</span>
               </button>
             ))}
           </div>
@@ -833,6 +1608,190 @@ export default function RoomPage() {
             </button>
           </div>
         </div>
+
+        <input ref={fileInputRef} className={styles.hiddenInput} type="file" accept="application/json" onChange={handleFileInputChange} />
+
+        {isMenuOpen ? (
+          <div className={styles.overlayBackdrop} onClick={() => setIsMenuOpen(false)}>
+            <div ref={menuRef} className={styles.menuPanel} onClick={(event) => event.stopPropagation()}>
+              <div className={styles.menuSection}>
+                {MENU_ACTIONS.map((action) => (
+                  <button
+                    key={action.id}
+                    type="button"
+                    className={action.accent ? styles.menuActionAccent : styles.menuAction}
+                    onClick={() => runMenuAction(action.id)}
+                  >
+                    <span>{action.label}</span>
+                    {action.shortcut ? <span className={styles.menuShortcut}>{action.shortcut}</span> : null}
+                  </button>
+                ))}
+              </div>
+
+              <div className={styles.menuDivider} />
+
+              <div className={styles.menuSection}>
+                <div className={styles.menuLabel}>Preferences</div>
+                <div className={styles.preferenceRow}>
+                  {(Object.keys(BOARD_BACKGROUNDS) as BoardBackground[]).map((theme) => (
+                    <button
+                      key={theme}
+                      type="button"
+                      className={boardBackground === theme ? styles.swatchActive : styles.swatch}
+                      onClick={() => setBoardBackground(theme)}
+                      title={theme}
+                    >
+                      <span className={styles.swatchDot} data-theme={theme} />
+                    </button>
+                  ))}
+                </div>
+                <p className={styles.menuHint}>Choose a board background and keep drawing.</p>
+              </div>
+
+              <div className={styles.menuDivider} />
+
+              <div className={styles.menuSection}>
+                <div className={styles.menuLabel}>Shape color</div>
+                <div className={styles.preferenceRow}>
+                  {SHAPE_COLORS.map((color) => (
+                    <button
+                      key={color.id}
+                      type="button"
+                      className={shapeColorId === color.id ? styles.swatchActive : styles.swatch}
+                      onClick={() => setShapeColorId(color.id)}
+                      title={color.label}
+                      aria-label={color.label}
+                    >
+                      <span className={styles.shapeSwatchDot} style={{ background: color.stroke }} />
+                    </button>
+                  ))}
+                </div>
+                <p className={styles.menuHint}>New shapes use this color until you change it again.</p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {isCommandPaletteOpen ? (
+          <div className={styles.dialogBackdrop} onClick={() => setIsCommandPaletteOpen(false)}>
+            <div className={styles.dialogPanel} onClick={(event) => event.stopPropagation()}>
+              <div className={styles.dialogHeader}>
+                <strong>Command palette</strong>
+                <span>Cmd+/</span>
+              </div>
+              <input
+                ref={commandInputRef}
+                className={styles.dialogInput}
+                value={commandQuery}
+                onChange={(event) => setCommandQuery(event.target.value)}
+                placeholder="Search actions"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    const firstAction = commandResults[0];
+                    if (firstAction) {
+                      runMenuAction(firstAction.id);
+                    }
+                  }
+                }}
+              />
+              <div className={styles.dialogList}>
+                {commandResults.length ? (
+                  commandResults.map((action) => (
+                    <button key={action.id} type="button" className={styles.dialogItem} onClick={() => runMenuAction(action.id)}>
+                      <span>{action.label}</span>
+                      {action.shortcut ? <span className={styles.menuShortcut}>{action.shortcut}</span> : null}
+                    </button>
+                  ))
+                ) : (
+                  <div className={styles.emptyState}>
+                    <strong>No actions found</strong>
+                    <span>Try a different keyword.</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {isFindOpen ? (
+          <div className={styles.dialogBackdrop} onClick={() => setIsFindOpen(false)}>
+            <div className={styles.dialogPanel} onClick={(event) => event.stopPropagation()}>
+              <div className={styles.dialogHeader}>
+                <strong>Find on canvas</strong>
+                <span>Cmd+F</span>
+              </div>
+              <input
+                ref={findInputRef}
+                className={styles.dialogInput}
+                value={findQuery}
+                onChange={(event) => setFindQuery(event.target.value)}
+                placeholder="Search text or shape type"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    const firstMatch = findMatches[0];
+                    if (firstMatch) {
+                      jumpToShape(firstMatch);
+                      setIsFindOpen(false);
+                    } else {
+                      setHint("No matching shape found.");
+                    }
+                  }
+                }}
+              />
+              <div className={styles.dialogList}>
+                {findMatches.length ? (
+                  findMatches.map((shape) => (
+                    <button
+                      key={shape.id}
+                      type="button"
+                      className={styles.dialogItem}
+                      onClick={() => {
+                        jumpToShape(shape);
+                        setIsFindOpen(false);
+                      }}
+                    >
+                      <span>
+                        {shape.type}
+                        {shape.type === "text" ? `: ${shape.text.slice(0, 28)}` : ""}
+                      </span>
+                      <span className={styles.menuShortcut}>#{shape.id.slice(0, 4)}</span>
+                    </button>
+                  ))
+                ) : (
+                  <div className={styles.emptyState}>
+                    <strong>No matches yet</strong>
+                    <span>Search by text content or shape type.</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {isHelpOpen ? (
+          <div className={styles.dialogBackdrop} onClick={() => setIsHelpOpen(false)}>
+            <div className={styles.helpPanel} onClick={(event) => event.stopPropagation()}>
+              <div className={styles.dialogHeader}>
+                <strong>Help</strong>
+                <span>Shortcuts</span>
+              </div>
+              <div className={styles.helpGrid}>
+                <div>
+                  <strong>Tools</strong>
+                  <p>1-0 select toolbar tools in order, including eraser.</p>
+                </div>
+                <div>
+                  <strong>Canvas</strong>
+                  <p>Cmd+F to search, Cmd+O to open, Cmd+Shift+E to export.</p>
+                </div>
+                <div>
+                  <strong>Menu</strong>
+                  <p>Use the menu for save, reset, preferences, and collaboration.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         <p className={styles.hint}>{loading ? "Loading room..." : error || hint}</p>
 
@@ -876,6 +1835,7 @@ export default function RoomPage() {
             style={{
               left: `${worldToScreen({ x: textEditor.x, y: textEditor.y }, viewport).x}px`,
               top: `${worldToScreen({ x: textEditor.x, y: textEditor.y }, viewport).y}px`,
+              color: selectedShapeColor.stroke,
             }}
             placeholder="Type text"
             rows={1}

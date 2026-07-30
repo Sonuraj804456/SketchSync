@@ -407,7 +407,21 @@
   font-size: 0.98rem;
 }
 
+.panelDetail {
+  margin-top: 6px;
+  color: rgba(245, 239, 230, 0.66);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.tokenStack {
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+}
+
 .tokenPill,
+.tokenPillFull,
 .tokenPillMuted {
   max-width: 100%;
   padding: 8px 12px;
@@ -422,9 +436,36 @@
   text-overflow: ellipsis;
 }
 
+.tokenPillFull {
+  max-width: min(320px, 100%);
+  white-space: normal;
+  word-break: break-all;
+  line-height: 1.4;
+}
+
 .tokenPillMuted {
   color: rgba(245, 239, 230, 0.58);
   background: rgba(255, 255, 255, 0.03);
+}
+
+.tokenActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.tokenAction {
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 214, 150, 0.16);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(245, 239, 230, 0.84);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .featureSection,
@@ -565,6 +606,16 @@
   background: rgba(103, 25, 25, 0.92);
   border: 1px solid rgba(255, 150, 150, 0.3);
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.3);
+}
+
+.tokenAction:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 214, 150, 0.28);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.tokenAction:active {
+  transform: translateY(0);
 }
 
 @media (max-width: 1080px) {
